@@ -1,7 +1,11 @@
 <?php
 
+use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\GoogleController;
-use App\Http\Controllers\Auth\HomeController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\LocationController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,9 +20,18 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', function () {
-    return view('main');
-});
+    return view('auth/login');
+})->name('main');
+Route::post('save-location', [LocationController::class, 'saveLocation']);
 
-Route::get('home', [HomeController::class, 'home']);
-Route::get('auth/google', [GoogleController::class, 'redirectToGoogle']);
-Route::get('auth/google/callback', [GoogleController::class, 'handleGoogleCallback']);
+Route::get('auth/{provider}', [AuthController::class, 'redirect']);
+Route::get('auth/{provider}/callback', [AuthController::class, 'handleCallback']);
+Route::post('login', [AuthController::class, 'login'])->name('login');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+    Route::get('home', [HomeController::class, 'home'])->name('home');
+    Route::get('logout', [AuthController::class, 'logout']);
+});

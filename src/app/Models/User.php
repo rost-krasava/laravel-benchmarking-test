@@ -10,6 +10,11 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
+    public const STATUS_INACTIVE = 1;
+    public const STATUS_ACTIVE = 2;
+    public const STATUS_INACTIVE_LABEL = 'Inactive';
+    public const STATUS_ACTIVE_LABEL = 'Active';
+
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
@@ -21,6 +26,13 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'first_name',
+        'last_name',
+        'profile',
+        'status',
+        'location',
+        'provider',
+        'provider_id',
     ];
 
     /**
@@ -41,4 +53,17 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    public function getStatus()
+    {
+        return $this->getUserStatuses()[$this->status];
+    }
+
+    protected function getUserStatuses(): array
+    {
+        return [
+            self::STATUS_INACTIVE => self::STATUS_INACTIVE_LABEL,
+            self::STATUS_ACTIVE => self::STATUS_ACTIVE_LABEL,
+        ];
+    }
 }

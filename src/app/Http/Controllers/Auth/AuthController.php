@@ -2,43 +2,84 @@
 
 namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Controller;
+use App\Repositories\ProviderUserRepositoryInterface;
+use App\Repositories\UserRepositoryInterface;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Auth;
-use Laravel\Socialite\Facades\Socialite;
-use App\Models\User;
 
 class AuthController extends Controller
 {
-    /**
-     * Handle user login using Google SSO.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function login(Request $request)
-    {
-        $this->validate($request, [
-            'token' => 'required',
-        ]);
+    protected UserRepositoryInterface $userRepository;
+    protected ProviderUserRepositoryInterface $authUserRepository;
 
-        $googleUser = Socialite::driver('google')->userFromToken($request->token);
-        $existingUser = User::where('email', $googleUser->email)->first();
-
-        if ($existingUser) {
-            // User already exists, authenticate the user
-            Auth::login($existingUser, true);
-            $token = $existingUser->createToken('MyApp')->accessToken;
-
-            return response()->json(['token' => $token]);
-        } else {
-            // User doesn't exist, return an error
-            return response()->json(['error' => 'User not found.'], 404);
-        }
+    public function __construct(
+        UserRepositoryInterface $userRepository,
+        ProviderUserRepositoryInterface $authUserRepository,
+    ) {
+        $this->userRepository = $userRepository;
+        $this->authUserRepository = $authUserRepository;
     }
 
-    public function register()
+    public function login(Request $request)
     {
+        if ($this->isLoginMethodToken($request)) {
+            $user = $this->authUserRepository->getByToken($request->token);
+            $existingUser = $this->userRepository->getByProvider($request->provider, $user->id);
+            if (!$existingUser) {
+                $existingUser = $this->userRepository->createFromAuthProvider($request->provider, $user);
+            }
+        } else {
+            $validatedData = $request->validate([
+                'email' => 'required|email',
+                'password' => 'required|min:6',
+            ]);
 
+            $existingUser = $this->userRepository->getByEmail($validatedData['email']);
+            if (!$existingUser) {
+                $existingUser = $this->userRepository->createFromCredentials(
+                    $validatedData['email'],
+                    $validatedData['password']
+                );
+            } else if (!Auth::attempt($validatedData)) {
+                return redirect('/')->with('error', 'Wrong authentication credentials');
+            }
+        }
+
+        Auth::login($existingUser, true);
+
+        return redirect('/home');
+    }
+
+    private function isLoginMethodToken(Request $request): bool
+    {
+        return $request->has('token') && $request->has('provider');
+    }
+
+    public function redirect(Request $request)
+    {
+        return $this->authUserRepository->getDriver()->stateless()->redirect();
+    }
+
+    public function handleCallback(Request $request)
+    {
+        try {
+            $user = $this->authUserRepository->getUser();
+        } catch (\Exception $e) {
+            return redirect('/')->with('error', "Authentication failed.");
+        }
+
+        return view("auth.handle-{$request->provider}-callback", ['token' => $user->token]);
+    }
+
+    public function logout(Request $request)
+    {
+        auth()->guard('web')->logout();
+
+        $request->session()->invalidate();
+
+        $request->session()->regenerateToken();
+
+        return redirect('/');
     }
 }
