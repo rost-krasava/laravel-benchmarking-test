@@ -7,6 +7,8 @@ Client Account Self Registration
 - `docker-compose run --rm artisan key:generate` - generate app key
 - `docker-compose run --rm artisan migrate` - migrate databases
 - `docker-compose run --rm artisan test` - run Units
+### Tip
+To move from /home endpoint to main screen simply remove /home from URI
 ## Specification
 ### OVERVIEW
 Objective of this proposal to build an api using laravel+mysql (details below) to allow clients to self register accounts to gain login access on xyz applications.
