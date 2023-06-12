@@ -2,21 +2,31 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Session;
-use stdClass;
 use Throwable;
+use App\Services\WeatherService;
+use Illuminate\Session\SessionManager;
 
 class HomeController extends Controller
 {
-    public function home(Request $request)
+    private SessionManager $sessionManager;
+    private WeatherService $weatherService;
+
+    public function __construct(
+        SessionManager $sessionManager,
+        WeatherService $weatherService
+    ) {
+        $this->sessionManager = $sessionManager;
+        $this->weatherService = $weatherService;
+    }
+
+    public function home(Request $request): JsonResponse
     {
         $user = $request->user();
-        $weatherData = Cache::get('weather_data_' . $user->id);
+        $weatherData = $this->weatherService->fetchUserWeatherData($user->id);
         if (!$weatherData) {
-            $location = Session::get('location');
+            $location = $this->sessionManager->get('location');
             if (!$location) {
                 return response()->json([
                     'status' => 'error',
@@ -27,7 +37,7 @@ class HomeController extends Controller
             $user->update(['location' => $location]);
 
             try {
-                $weatherData = $this->fetchWeatherData(json_decode($location));
+                $weatherData = $this->weatherService->fetchUserWeatherData($user->id, json_decode($location));
             } catch (Throwable $e) {
                 return response()->json([
                     'status' => 'error',
@@ -35,8 +45,6 @@ class HomeController extends Controller
                     'json' => json_encode($e),
                 ]);
             }
-
-            Cache::put('weather_data_' . $user->id, $weatherData, 60);
         }
 
         return response()->json([
@@ -52,19 +60,5 @@ class HomeController extends Controller
             ],
             'main' => $weatherData['main']
         ]);
-    }
-
-    private function fetchWeatherData(stdClass $location): array
-    {
-        $apiKey = config('services.openweathermap.api_key');
-
-        $response = Http::get("https://api.openweathermap.org/data/2.5/weather", [
-            'lat' => $location->latitude,
-            'lon' => $location->longitude,
-            'appid' => $apiKey,
-            'units' => 'metric',
-        ]);
-
-        return $response->json();
     }
 }
